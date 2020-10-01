@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn import preprocessing
 
-data = pd.read_csv(filepath_or_buffer='../Covid High Flow300 Fix.csv', header=1, dtype=str)
+data = pd.read_csv(filepath_or_buffer='../../Covid High Flow300 Fix.csv', header=1, dtype=str)
 #print(data.dtypes)
 #print(list(data.columns.values))
 
@@ -31,16 +31,11 @@ convertDict = {'Age':float, 'Zip code':float, 'BMI':float, 'Weight (kg)':float, 
 	       'CPAP / BiPAP':bool, 'Intubation':bool, 'Decadron':bool, 'Remdesivir':bool, 'Convalesent Plasma':bool,
 	       'CPAP / BiPAP.1':bool, 'Intubation.1':bool
                }
-#labelList = ['Prior MI (Stent CABG)','ESRD on HD','CPAP / BiPAP', 'Intubation', 'Decadron','Remdesivir','Convalesent Plasma', 'HTN', 'Chronic Lung Disease (COPD etc)', 'CPAP / BiPAP.1', 'Intubation.1']
 
 for i in yesNoList:
     data[i] = data[i].map({'yes':True, 'no':False, 'Yes':True, 'No':False, 'yes ':True, 'no ':False})
 data['Sex'] = data['Sex'].map({'M': False, 'F': True})
 data = data.astype(convertDict)
-
-#lbl = preprocessing.LabelEncoder()
-#for i in labelList:
-#    data[i] = lbl.fit_transform(data[i].astype(str))
 
 inputColumns = ['Age','Sex','Zip code','DM','HTN','Prior MI (Stent CABG)','CHF (HFrEF)','CHF (HFpEF)',
                 'OSA', 'Sick Contact hospitalized?', 'Chronic Lung Disease (COPD etc)',
@@ -62,33 +57,17 @@ inputColumns = ['Age','Sex','Zip code','DM','HTN','Prior MI (Stent CABG)','CHF (
                 'CPAP / BiPAP', 'Intubation', 'HGBA1c (+/1 100 days)','WBC','HGB','Creat','ALT','TBILI',
                 'CRP','DDimer', 'Ferritin', 'LDH', 'Decadron', 'Remdesivir', 'Convalesent Plasma']
 '''
-#outputColumn = 'Oxygen>30'
 outputColumn = 'Zero to 60 L oxygen.2'
-
-
 
 inputData = data[inputColumns]
 outputData = data[outputColumn]
 
-#print(inputData)
-#print(outputData)
-
 inputTrain, inputTest, outputTrain, outputTest = train_test_split(inputData, outputData, test_size = .3, random_state = 2)
-print(inputTrain.shape)
-print(inputTest.shape)
-print(outputTrain.shape)
-print(outputTest.shape)
-
-#print(inputTrain)
-#print(outputTrain)
 
 trainMatrix = xgb.DMatrix(inputTrain, label=outputTrain, feature_names=inputColumns[:60])
 testMatrix = xgb.DMatrix(inputTest, label=outputTest, feature_names=inputColumns[:60])
 params = {'max_depth':5, 'eta':0.004, 'subsample':1.0, 'min_child_weight':1.0, 'reg_lambda':0.0, 'reg_alpha':0.0, 'objective':'binary:logistic', 'eval_metric': 'error'}
 model = xgb.train(params, trainMatrix, 1000, evals=[(testMatrix, "Test")], early_stopping_rounds=200)
-
-#model = xgb.XGBClassifier()
-#print(model.fit(inputTrain, outputTrain))
 
 param_grid = {'eta':[.3,.25,.2,.15,0.1,.075,0.05,0.01,0.005,0.001], 'max_depth':np.arange(1,10,1).tolist(), 'subsample':np.arange(1,0.1,-0.1).tolist(), 'colsample_bytree':np.arange(1,0.1,-0.1).tolist(), 'min_child_weight':np.arange(1,100,5).tolist()}
 #param_grid = {'eta':[.3,.25,.2,.15,0.1], 'max_depth':np.arange(1,10,5).tolist(), 'subsample':np.arange(1,0.1,-0.5).tolist(), 'colsample_bytree':np.arange(1,0.1,-0.5).tolist(), 'min_child_weight':np.arange(1,100,50).tolist()}
@@ -105,7 +84,7 @@ for max_depth in param_grid['max_depth']:
                     if abs(cvResults['test-{}-mean'.format('error')]).min() < lowestError:
                         lowestError = abs(cvResults['test-{}-mean'.format('error')]).min()
                         bestParams = {'max_depth':max_depth, 'eta':eta, 'subsample':subsample, 'colsample_bytree':colsample_bytree, 'min_child_weight':min_child_weight, 'objective':'binary:logistic', 'eval_metric': 'error'}
-                    print(str(abs(cvResults['test-{}-mean'.format('error')]).min()) + ' , ' + str(lowestError))
+                    #print(str(abs(cvResults['test-{}-mean'.format('error')]).min()) + ' , ' + str(lowestError))
 print(bestParams)
 print(lowestError)
 
@@ -118,14 +97,9 @@ outputTestPredict = model.predict(testMatrix)
 
 print(bestParams)
 
-print("Training Accuracy: " + str(accuracy_score(outputTrain, outputTrainPredict.round())))
-print("Testing Accuracy: " + str(accuracy_score(outputTest, outputTestPredict.round())) + "\n")
-
-print(classification_report(outputTest, outputTestPredict.round()))
-print("\n\t   Predicted")
-print(pd.crosstab(outputTest, outputTestPredict.round()))
-#print(outputTest)
-#print(abs(outputTestPredict.round()))
+print("\nSojourner Model:")
+print("\nTraining Accuracy: " + str(accuracy_score(outputTrain, outputTrainPredict.round())))
+print("Testing Accuracy: " + str(accuracy_score(outputTest, outputTestPredict.round())))
 
 truePositive = 0
 trueNegative = 0
@@ -142,6 +116,12 @@ for i in range(len(outputTest)):
     falseNegative = falseNegative + 1
   elif outputTest.values[i] == False and outputTestPredict.round()[i] == 1:
     falsePositive = falsePositive + 1
+
+print("\n\t\tActual")
+print("Predicted\tTrue\tFalse")
+print("True\t\t" + str(truePositive) + "\t" + str(falsePositive))
+print("False\t\t" + str(falseNegative) + "\t" + str(trueNegative))
+
 print("\nTrue Positives: " + str(truePositive))
 print("True Negatives: " + str(trueNegative))
 print("False Negatives (Type II error): " + str(falseNegative))

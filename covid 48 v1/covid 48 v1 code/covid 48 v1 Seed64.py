@@ -10,8 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn import preprocessing
 
-data = pd.read_csv(filepath_or_buffer='../../Covid High Flow300 Test.csv', header=1, dtype=str)
-sexData = data['Sex']
+data = pd.read_csv(filepath_or_buffer='../../Covid High Flow300 Fix.csv', header=1, dtype=str)
 #print(data.dtypes)
 #print(list(data.columns.values))
 
@@ -58,116 +57,64 @@ inputColumns = ['Age','Sex','Zip code','DM','HTN','Prior MI (Stent CABG)','CHF (
                 'CPAP / BiPAP', 'Intubation', 'HGBA1c (+/1 100 days)','WBC','HGB','Creat','ALT','TBILI',
                 'CRP','DDimer', 'Ferritin', 'LDH', 'Decadron', 'Remdesivir', 'Convalesent Plasma']
 '''
-#outputColumn = 'Oxygen>30'
 outputColumn = 'Zero to 60 L oxygen.2'
-
-
 
 inputData = data[inputColumns]
 outputData = data[outputColumn]
 
-#Load in our models from file
+inputTrain, inputTest, outputTrain, outputTest = train_test_split(inputData, outputData, test_size = .3, random_state = 64)
 
-casesToTest = 24 #specify how many cases we want to test
-dat = xgb.DMatrix(inputData.head(casesToTest))
-labels = outputData.head(casesToTest)
+trainMatrix = xgb.DMatrix(inputTrain, label=outputTrain, feature_names=inputColumns[:60])
+testMatrix = xgb.DMatrix(inputTest, label=outputTest, feature_names=inputColumns[:60])
+params = {'max_depth':5, 'eta':0.004, 'subsample':1.0, 'min_child_weight':1.0, 'reg_lambda':0.0, 'reg_alpha':0.0, 'objective':'binary:logistic', 'eval_metric': 'error'}
+model = xgb.train(params, trainMatrix, 1000, evals=[(testMatrix, "Test")], early_stopping_rounds=200)
 
+param_grid = {'eta':[.3,.25,.2,.15,0.1,.075,0.05,0.01,0.005,0.001], 'max_depth':np.arange(1,10,1).tolist(), 'subsample':np.arange(1,0.1,-0.1).tolist(), 'colsample_bytree':np.arange(1,0.1,-0.1).tolist(), 'min_child_weight':np.arange(1,100,5).tolist()}
+#param_grid = {'eta':[.3,.25,.2,.15,0.1], 'max_depth':np.arange(1,10,5).tolist(), 'subsample':np.arange(1,0.1,-0.5).tolist(), 'colsample_bytree':np.arange(1,0.1,-0.5).tolist(), 'min_child_weight':np.arange(1,100,50).tolist()}
+#Save the best results
+bestParams = {}
+lowestError = 2048
 
+for max_depth in param_grid['max_depth']:
+    for eta in param_grid['eta']:
+        for subsample in param_grid['subsample']:
+            for colsample_bytree in param_grid['colsample_bytree']:
+                for min_child_weight in param_grid['min_child_weight']:
+                    cvResults = xgb.cv({'max_depth':max_depth, 'eta':eta, 'subsample':subsample, 'colsample_bytree':colsample_bytree, 'min_child_weight':min_child_weight, 'objective':'binary:logistic', 'eval_metric': 'error'}, trainMatrix, num_boost_round=600, seed=2, nfold=5, early_stopping_rounds=125)
+                    if abs(cvResults['test-{}-mean'.format('error')]).min() < lowestError:
+                        lowestError = abs(cvResults['test-{}-mean'.format('error')]).min()
+                        bestParams = {'max_depth':max_depth, 'eta':eta, 'subsample':subsample, 'colsample_bytree':colsample_bytree, 'min_child_weight':min_child_weight, 'objective':'binary:logistic', 'eval_metric': 'error'}
+                    #print(str(abs(cvResults['test-{}-mean'.format('error')]).min()) + ' , ' + str(lowestError))
+print(bestParams)
+print(lowestError)
 
-bst2 = xgb.Booster()  # init model
+model = xgb.train(bestParams, trainMatrix, 5000, evals=[(testMatrix, "Test")], early_stopping_rounds=1000)
 
-bst2.load_model('../covid 48 v1 models/covid 48 v1 Seed2.model')  
-labels_predict2 = bst2.predict(dat)
+model.save_model('../covid 48 v1 models/covid 48 v1 Seed64.model')
 
+outputTrainPredict = model.predict(trainMatrix)
+outputTestPredict = model.predict(testMatrix)
 
-#print(labels_predict2)
+print(bestParams)
 
-
-
-
-
-bst8 = xgb.Booster()  # init model
-
-bst8.load_model('../covid 48 v1 models/covid 48 v1 Seed8.model')  
-
-labels_predict8 = bst8.predict(dat)
-
-
-#print(labels_predict8)
-
-
-
-
-
-bst24 = xgb.Booster()  # init model
-
-bst24.load_model('../covid 48 v1 models/covid 48 v1 Seed24.model')  
-
-labels_predict24 = bst24.predict(dat)
-
-
-#print(labels_predict24)
-
-
-
-
-
-bst64 = xgb.Booster()  # init model
-
-bst64.load_model('../covid 48 v1 models/covid 48 v1 Seed64.model')  
-
-labels_predict64 = bst64.predict(dat)
-
-
-#print(labels_predict64)
-
-
-
-
-
-bst256 = xgb.Booster()  # init model
-
-bst256.load_model('../covid 48 v1 models/covid 48 v1 Seed256.model')  
-
-labels_predict256 = bst256.predict(dat)
-
-
-#print(labels_predict256)
-
-
-
-
-
-#specify which patients (which rows) to check the results of
-
-patientNum = np.arange(0, casesToTest, 1).tolist()
-oxygen = []
-output = []
-
-for i in range(len(labels_predict2)):
-	if patientNum.count(i) > 0:
-		if labels_predict256[i].round() + labels_predict8[i].round() + labels_predict24[i].round() + labels_predict64[i].round() + labels_predict256[i].round() > 2:
-			oxygen.append(1)
-		else:
-			oxygen.append(0)
-		output.append(outputData[i])
-
-print("Accuracy: " + str(accuracy_score(output, oxygen)) + "\n")
-#print(classification_report(output, oxygen))
+print("\nCuriosity Model:")
+print("\nTraining Accuracy: " + str(accuracy_score(outputTrain, outputTrainPredict.round())))
+print("Testing Accuracy: " + str(accuracy_score(outputTest, outputTestPredict.round())))
 
 truePositive = 0
 trueNegative = 0
 falsePositive = 0
 falseNegative = 0
 
-for i in range(len(output)):
-  if output[i] == True and oxygen[i] == 1:
+
+for i in range(len(outputTest)):
+  if outputTest.values[i] == True and outputTestPredict.round()[i] == 1:
     truePositive = truePositive + 1
-  elif output[i] == False and oxygen[i] == 0:
+  elif outputTest.values[i] == False and outputTestPredict.round()[i] == 0:
     trueNegative = trueNegative + 1
-  elif output[i] == True and oxygen[i] == 0:
+  elif outputTest.values[i] == True and outputTestPredict.round()[i] == 0:
     falseNegative = falseNegative + 1
-  elif output[i] == False and oxygen[i] == 1:
+  elif outputTest.values[i] == False and outputTestPredict.round()[i] == 1:
     falsePositive = falsePositive + 1
 
 print("\n\t\tActual")
@@ -177,20 +124,15 @@ print("False\t\t" + str(falseNegative) + "\t" + str(trueNegative))
 
 print("\nTrue Positives: " + str(truePositive))
 print("True Negatives: " + str(trueNegative))
-print("False Negatives: " + str(falseNegative))
-print("False Positives: " + str(falsePositive))
+print("False Negatives (Type II error): " + str(falseNegative))
+print("False Positives (Type I error): " + str(falsePositive))
 print("Sensitivity: " + str(truePositive / (truePositive + falseNegative)))
 print("Specificity: " + str(trueNegative / (trueNegative + falsePositive)))
-print("Positive Predictive Value: " + str(truePositive / (truePositive + falsePositive)))
-print("Negative Predictive Value: " + str(trueNegative / (trueNegative + falseNegative)))
-print()
+print("Positve Predicted Rate: " + str(truePositive / (truePositive + falsePositive)))
+print("Negative Predicted Rate: " + str(trueNegative / (trueNegative + falseNegative)) + "\n")
 
-print("Individual Patient Breakdown")
-print("Case #\t\tOxygen Requirement\t Patient Info")
-print("===============================================================================================")
-for j in range(len(oxygen)):
-	if oxygen[j] == 1:
-		print("Case #" + str(data['Case #'][j]) + ": \tOxygen Required\t\t (Admissions Date: " + data['Admission Date'][j] + ", \tAge: " + str(data['Age'][j]) + ", \tSex: " + sexData[j] + ")")
-	else:
-		print("Case #" + str(data['Case #'][j]) + ": \tNo Oxygen Required\t (Admissions Date: " + data['Admission Date'][j] + ", \tAge: " + str(data['Age'][j]) + ", \tSex: " + sexData[j] + ")")
-	
+fig, ax = plt.subplots(figsize=(15,12))
+xgb.plot_importance(model, ax=ax)
+plt.show()
+
+
