@@ -128,7 +128,7 @@ print("False Negatives (Type II error): " + str(falseNegative))
 print("False Positives (Type I error): " + str(falsePositive))
 print("Sensitivity: " + str(truePositive / (truePositive + falseNegative)))
 print("Specificity: " + str(trueNegative / (trueNegative + falsePositive)))
-print("Positve Predicted Rate: " + str(truePositive / (truePositive + falsePositive)))
+print("Positive Predicted Rate: " + str(truePositive / (truePositive + falsePositive)))
 print("Negative Predicted Rate: " + str(trueNegative / (trueNegative + falseNegative)) + "\n")
 
 fig, ax = plt.subplots(figsize=(15,12))
