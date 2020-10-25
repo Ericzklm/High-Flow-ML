@@ -68,7 +68,7 @@ outputData = data[outputColumn]
 
 #Load in our models from file
 
-casesToTest = 24 #specify how many cases we want to test
+casesToTest = len(inputData) #specify how many cases we want to test
 dat = xgb.DMatrix(inputData.head(casesToTest))
 labels = outputData.head(casesToTest)
 
@@ -80,7 +80,7 @@ bst2.load_model('../covid 48 v1 models/covid 48 v1 Seed2.model')
 labels_predict2 = bst2.predict(dat)
 
 
-#print(labels_predict2)
+print(labels_predict2)
 
 
 
